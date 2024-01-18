@@ -1,12 +1,23 @@
 import tensorflow as tf
 import numpy as np
 
-from .aggregators import *
+from .aggregators import *  
 from .layers import Dense
 
 class VolRec(object):
+    """VolRec: A class implementing a collaborative filtering model with attention mechanism."""
 
     def __init__(self, args, support_sizes, placeholders):
+        """Initialize the VolRec model.
+
+        Args:
+            args (object): Model configuration parameters.
+            support_sizes (list): List of support sizes for different layers.
+            placeholders (dict): TensorFlow placeholders for input data.
+
+        Returns:
+            None
+        """
         self.support_sizes = support_sizes
         if args.aggregator_type == "mean":
             self.aggregator_cls = MeanAggregator
@@ -73,6 +84,11 @@ class VolRec(object):
         self.build()
 
     def global_features(self):
+        """Compute global features for layers 1 and 2.
+
+        Returns:
+            list: List of global feature tensors for layers 2 and 1.
+        """
         self.user_embedding = tf.get_variable('user_embedding', [self.n_users, self.emb_user],\
                                         initializer=tf.glorot_uniform_initializer())
         feature_layer1 = tf.nn.embedding_lookup(self.user_embedding, self.support_nodes_layer1)
@@ -87,9 +103,11 @@ class VolRec(object):
         return [feature_layer2, feature_layer1]
     
     def local_features(self):
-        '''
-        Use the same rnn in decode function
-        '''
+        """Compute local features using LSTM for layers 1 and 2.
+
+        Returns:
+            list: List of local feature tensors for layers 2 and 1.
+        """
         initial_state_layer1 = self.lstm_cell.zero_state(self.batch_size*self.samples_1*self.samples_2, dtype=tf.float32)
         initial_state_layer2 = self.lstm_cell.zero_state(self.batch_size*self.samples_2, dtype=tf.float32)
         inputs_1 = tf.nn.embedding_lookup(self.embedding, self.support_sessions_layer1)
@@ -117,6 +135,11 @@ class VolRec(object):
         return [local_layer2, local_layer1]
 
     def global_and_local_features(self):
+        """Combine global and local features for layers 1 and 2.
+
+        Returns:
+            list: List of combined feature tensors for layers 2 and 1.
+        """
         #global features
         global_feature_layer2, global_feature_layer1 = self.global_features()
         local_feature_layer2, local_feature_layer1 = self.local_features()
@@ -125,23 +148,22 @@ class VolRec(object):
         return [global_local_layer2, global_local_layer1]
 
     def aggregate(self, hidden, dims, num_samples, support_sizes, 
-            aggregators=None, name=None, concat=False, model_size="small"):
-        """ At each layer, aggregate hidden representations of neighbors to compute the hidden representations 
-            at next layer.
+                  aggregators=None, name=None, concat=False, model_size="small"):
+        """Aggregate hidden representations of neighbors to compute representations at the next layer.
+
         Args:
-            samples: a list of samples of variable hops away for convolving at each layer of the
-                network. Length is the number of layers + 1. Each is a vector of node indices.
-            input_features: the input features for each sample of various hops away.
-            dims: a list of dimensions of the hidden representations from the input layer to the
-                final layer. Length is the number of layers + 1.
-            num_samples: list of number of samples for each layer.
-            support_sizes: the number of nodes to gather information from for each layer.
-            batch_size: the number of inputs (different for batch inputs and negative samples).
+            hidden (list): List of hidden representations at the current layer for support nodes.
+            dims (list): List of dimensions of hidden representations for each layer.
+            num_samples (list): List of number of samples for each layer.
+            support_sizes (list): List of support sizes for different layers.
+            aggregators (list): List of aggregator instances.
+            name (str): Name for the aggregator.
+            concat (bool): Whether to concatenate hidden representations.
+            model_size (str): Model size configuration.
+
         Returns:
-            The hidden representation at the final layer for all nodes in batch
+            tuple: Tuple containing the aggregated hidden representation at the final layer and a list of aggregators.
         """
-
-
         # length: number of layers + 1
         hidden = hidden
         new_agg = aggregators is None
@@ -177,6 +199,11 @@ class VolRec(object):
         return hidden[0], aggregators
 
     def decode(self):
+        """Decode input sequences using LSTM.
+
+        Returns:
+            list: List of decoded feature tensors.
+        """
         self.lstm_cell = lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size)
         initial_state = lstm_cell.zero_state(self.batch_size, dtype=tf.float32)
         time_major_x = tf.transpose(self.input_x)
@@ -192,7 +219,23 @@ class VolRec(object):
         return [tf.squeeze(t,[0]) for t in slices]
 
     def step_by_step(self, features_0, features_1_2, dims, num_samples, support_sizes, 
-            aggregators=None, name=None, concat=False, model_size="small"):
+                     aggregators=None, name=None, concat=False, model_size="small"):
+        """Perform layer-wise processing step by step.
+
+        Args:
+            features_0 (list): List of feature tensors at layer 0.
+            features_1_2 (list): List of feature tensors at layers 1 and 2.
+            dims (list): List of dimensions of hidden representations for each layer.
+            num_samples (list): List of number of samples for each layer.
+            support_sizes (list): List of support sizes for different layers.
+            aggregators (list): List of aggregator instances.
+            name (str): Name for the aggregator.
+            concat (bool): Whether to concatenate hidden representations.
+            model_size (str): Model size configuration.
+
+        Returns:
+            Tensor: Stacked tensor containing layer-wise outputs.
+        """
         self.aggregators = None
         outputs = []
         for feature0 in features_0:
@@ -203,6 +246,11 @@ class VolRec(object):
         return tf.stack(outputs, axis=0)
 
     def build(self):
+        """Build the VolRec model with embedding, features, and loss computation.
+
+        Returns:
+            None
+        """
         self.embedding = embedding = tf.get_variable('item_embedding', [self.n_items, self.emb_item],\
                                         initializer=tf.glorot_uniform_initializer())
         features_0 = self.decode() # features of zero layer nodes. 
@@ -229,6 +277,11 @@ class VolRec(object):
         self.opt_op = self.optimizer.apply_gradients(clipped_grads_and_vars, global_step=self.global_step)
     
     def _loss(self):
+        """Compute the loss function, including regularization terms.
+
+        Returns:
+            Tensor: Loss value.
+        """
         reg_loss = 0.
         xe_loss = 0.
         fc_layer = Dense(self.dim2 + self.hidden_size, self.emb_item, act=lambda x:x, dropout=self.dropout if self.training else 0.)
@@ -248,6 +301,11 @@ class VolRec(object):
         return tf.reduce_sum(xe_loss) / self.point_count + reg_loss
 
     def _ndcg(self):
+        """Compute Normalized Discounted Cumulative Gain (NDCG) for evaluation.
+
+        Returns:
+            Tensor: NDCG value.
+        """
         predictions = tf.transpose(self.logits)
         targets = tf.reshape(self.input_y, [-1])
         pred_values = tf.expand_dims(tf.diag_part(tf.nn.embedding_lookup(predictions, targets)), -1)
@@ -259,6 +317,11 @@ class VolRec(object):
         return tf.reduce_sum(ndcg)
 
     def _recall(self):
+        """Compute Recall@k for evaluation.
+
+        Returns:
+            Tensor: Recall@k value.
+        """
         predictions = self.logits
         targets = tf.reshape(self.input_y, [-1])
         recall_at_k = tf.nn.in_top_k(predictions, targets, k=10)
@@ -268,6 +331,14 @@ class VolRec(object):
         return tf.reduce_sum(recall_at_k)
 
 def log2(x):
+    """Compute the logarithm base 2.
+
+    Args:
+        x (Tensor): Input tensor.
+
+    Returns:
+        Tensor: Logarithm base 2 of the input tensor.
+    """
     numerator = tf.log(x)
     denominator = tf.log(tf.constant(2, dtype=numerator.dtype))
     return numerator / denominator
