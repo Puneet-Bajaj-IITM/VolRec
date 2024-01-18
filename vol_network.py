@@ -1,13 +1,17 @@
 import pandas as pd
-import pandas as pd
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from datetime import datetime
 
-
 def set_up():
+    """
+    Load and preprocess organizer user data.
+    
+    Returns:
+        pd.DataFrame: Preprocessed organizer user data.
+    """
     org_user = pd.read_csv('data/organizer_user_data.csv')
-    org_user = org_user[org_user['organizer id'] != -1] #drop the -1 app test data
+    org_user = org_user[org_user['organizer id'] != -1]  # Drop the -1 app test data
     org_user.rename(
         columns={'organizer id': 'org_id', 'Unnamed: 0': 'count', 'user id': 'user_id', 'issued time': 'Timestamp',
                  'districts': 'Location'}, inplace=True)
@@ -25,16 +29,21 @@ def set_up():
     return _org_user
 
 def network():
+    """
+    Build and save the volunteer network based on user interactions.
+    
+    Returns:
+        None
+    """
     data = set_up()
     network = pd.crosstab(data['UserId'], data['ItemId'])
-    network = network.apply(lambda row: row/row.sum(), axis = 1) # normalized/proobability P(o|v)
+    network = network.apply(lambda row: row / row.sum(), axis=1)  # Normalize/probability P(o|v)
     row_id = network.index
     neigh = cosine_similarity(network)
-    neigh[np.diag_indices_from(neigh)]= -1
-    _neigh = pd.DataFrame(neigh, index = row_id, columns = row_id)
-    net = pd.DataFrame(_neigh.apply(lambda x: list(_neigh.columns[np.array(x)
-                .argsort()[::-1][:10]]),axis=1)
-                .to_list(), columns = ['a','b','c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'])
+    neigh[np.diag_indices_from(neigh)] = -1
+    _neigh = pd.DataFrame(neigh, index=row_id, columns=row_id)
+    net = pd.DataFrame(_neigh.apply(lambda x: list(_neigh.columns[np.array(x).argsort()[::-1][:10]]), axis=1)
+                        .to_list(), columns=['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'])
 
     net['UserId'] = row_id
     net = pd.melt(net, id_vars=['UserId'])
