@@ -1,7 +1,11 @@
 <component name="InspectionProjectProfileManager">
   <profile version="1.0">
+    <!-- Project Name -->
     <option name="myName" value="Project Default" />
+
+    <!-- PyCompatibility Inspection Tool -->
     <inspection_tool class="PyCompatibilityInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <!-- Supported Python Versions -->
       <option name="ourVersions">
         <value>
           <list size="3">
