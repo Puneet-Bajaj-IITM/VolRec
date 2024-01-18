@@ -14,7 +14,7 @@ from .model import VolRec
 
 seed = 123
 np.random.seed(seed)
-tf.set_random_seed(seed)
+tf.random.set_seed(seed)
 
 def evaluate(sess, model, minibatch, val_or_test='val'):
     epoch_val_cost = []
@@ -255,9 +255,9 @@ def parseArgs():
 def main(argv=None):
     args = parseArgs()
     print('Loading training data..')
-    data = load_data('data_patha')
+    data = load_data('data')
     print("Training data loaded!")
     train(args, data)
 
 if __name__ == '__main__':
-    tf.app.run()
+    main()

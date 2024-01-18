@@ -291,7 +291,7 @@ class MinibatchIterator(object):
 
 
 if __name__ == '__main__':
-    data = load_data('data_path')
+    data = load_data('data')
     adj_info = data[0]
     latest_per_user_by_time = data[1]
     user_id_map = data[2]

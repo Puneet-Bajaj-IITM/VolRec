@@ -6,8 +6,8 @@ import pandas as pd
 import random
 
 def load_adj(data_path):
-    df_adj = pd.read_csv(data_path + '/adj.tsv', sep='\t', dtype={0:np.int32, 1:np.int32})
-    return df_adj    
+    df_adj = pd.read_csv(data_path + '/volunteer_network.tsv', sep=',', dtype={0: np.int32, 1: np.int32})
+    return df_adj
 
 def load_latest_session(data_path):
     ret = []
@@ -42,5 +42,5 @@ def load_data(data_path):
 
 if __name__ == '__main__':
     # test data loading.
-    data_path = 'data_path'
+    data_path = 'data'
     data = load_data(data_path)
