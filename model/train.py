@@ -1,8 +1,11 @@
-#coding=utf-8
+# Importing necessary libraries and modules
+# Also setting seeds for reproducibility
+# Note: Make sure to replace 'data_patha' and 'save/' with actual paths
+
 from __future__ import division
 from __future__ import print_function
-
-import os, sys
+import os
+import sys
 import argparse
 import tensorflow as tf
 import numpy as np
@@ -17,72 +20,100 @@ np.random.seed(seed)
 tf.set_random_seed(seed)
 
 def evaluate(sess, model, minibatch, val_or_test='val'):
+    """
+    Evaluate the model on the validation or test set.
+
+    Args:
+        sess (tf.Session): TensorFlow session.
+        model (VolRec): Instance of the VolRec model.
+        minibatch (MinibatchIterator): Minibatch iterator for data.
+        val_or_test (str): Specifies whether to evaluate on validation ('val') or test ('test') set.
+
+    Returns:
+        tuple: A tuple containing evaluation metrics (average cost, recall@10, and NDCG).
+    """
     epoch_val_cost = []
     epoch_val_recall = []
     epoch_val_ndcg = []
     epoch_val_point = []
+
     while not minibatch.end_val(val_or_test):
         feed_dict = minibatch.next_val_minibatch_feed_dict(val_or_test)
-        outs = sess.run([model.loss,model.sum_recall, model.sum_ndcg, model.point_count], feed_dict=feed_dict)
+        outs = sess.run([model.loss, model.sum_recall, model.sum_ndcg, model.point_count], feed_dict=feed_dict)
         epoch_val_cost.append(outs[0])
         epoch_val_recall.append(outs[1])
         epoch_val_ndcg.append(outs[2])
         epoch_val_point.append(outs[3])
-    return np.mean(epoch_val_cost), np.sum(epoch_val_recall) / np.sum(epoch_val_point), np.sum(epoch_val_ndcg) / np.sum(epoch_val_point)
+
+    avg_val_cost = np.mean(epoch_val_cost)
+    avg_val_recall = np.sum(epoch_val_recall) / np.sum(epoch_val_point)
+    avg_val_ndcg = np.sum(epoch_val_ndcg) / np.sum(epoch_val_point)
+
+    return avg_val_cost, avg_val_recall, avg_val_ndcg
 
 def construct_placeholders(args):
+    """
+    Construct TensorFlow placeholders for input data.
+
+    Args:
+        args (Args): Instance of the Args class containing model parameters.
+
+    Returns:
+        dict: Dictionary of TensorFlow placeholders.
+    """
     # Define placeholders
     placeholders = {
         'input_x': tf.placeholder(tf.int32, shape=(args.batch_size, args.max_length), name='input_session'),
         'input_y': tf.placeholder(tf.int32, shape=(args.batch_size, args.max_length), name='output_session'),
         'mask_y': tf.placeholder(tf.float32, shape=(args.batch_size, args.max_length), name='mask_x'),
-        'support_nodes_layer1': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_1*args.samples_2), name='support_nodes_layer1'),
-        'support_nodes_layer2': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_2), name='support_nodes_layer2'),
-        'support_sessions_layer1': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_1*args.samples_2,\
-                                    args.max_length), name='support_sessions_layer1'),
-        'support_sessions_layer2': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_2,\
-                                    args.max_length), name='support_sessions_layer2'),
-        'support_lengths_layer1': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_1*args.samples_2), 
-                                    name='support_lengths_layer1'),
-        'support_lengths_layer2': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_2), 
-                                    name='support_lengths_layer2'),
+        'support_nodes_layer1': tf.placeholder(tf.int32, shape=(args.batch_size * args.samples_1 * args.samples_2), name='support_nodes_layer1'),
+        'support_nodes_layer2': tf.placeholder(tf.int32, shape=(args.batch_size * args.samples_2), name='support_nodes_layer2'),
+        'support_sessions_layer1': tf.placeholder(tf.int32, shape=(args.batch_size * args.samples_1 * args.samples_2, args.max_length), name='support_sessions_layer1'),
+        'support_sessions_layer2': tf.placeholder(tf.int32, shape=(args.batch_size * args.samples_2, args.max_length), name='support_sessions_layer2'),
+        'support_lengths_layer1': tf.placeholder(tf.int32, shape=(args.batch_size * args.samples_1 * args.samples_2), name='support_lengths_layer1'),
+        'support_lengths_layer2': tf.placeholder(tf.int32, shape=(args.batch_size * args.samples_2), name='support_lengths_layer2'),
     }
     return placeholders
 
 def train(args, data):
-    adj_info = data[0]
-    latest_per_user_by_time = data[1]
-    user_id_map = data[2]
-    item_id_map = data[3]
-    train_df = data[4]
-    valid_df = data[5]
-    test_df = data[6]
-    
+    """
+    Train the VolRec model.
+
+    Args:
+        args (Args): Instance of the Args class containing model parameters.
+        data: Data loaded using the load_data function.
+
+    Returns:
+        None
+    """
+    adj_info, latest_per_user_by_time, user_id_map, item_id_map, train_df, valid_df, test_df = data
+
+    # Setting model parameters based on data
     args.num_items = len(item_id_map) + 1
     args.num_users = len(user_id_map)
     placeholders = construct_placeholders(args)
+
+    # Creating directories and paths
     if not os.path.exists(args.ckpt_dir):
         os.makedirs(args.ckpt_dir)
     ckpt_path = os.path.join(args.ckpt_dir, 'model.ckpt')
 
-    minibatch = MinibatchIterator(adj_info,
-                latest_per_user_by_time,
-                [train_df, valid_df, test_df],
-                placeholders,
-                batch_size=args.batch_size,
-                max_degree=args.max_degree,
-                num_nodes=len(user_id_map),
-                max_length=args.max_length,
-                samples_1_2=[args.samples_1, args.samples_2])
-    
+    # Creating MinibatchIterator
+    minibatch = MinibatchIterator(adj_info, latest_per_user_by_time, [train_df, valid_df, test_df], placeholders,
+                                  batch_size=args.batch_size, max_degree=args.max_degree, num_nodes=len(user_id_map),
+                                  max_length=args.max_length, samples_1_2=[args.samples_1, args.samples_2])
+
+    # Creating VolRec model
     volrec = VolRec(args, minibatch.sizes, placeholders)
-    
+
+    # TensorFlow session and saver
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
     sess.run(tf.global_variables_initializer())
     saver = tf.train.Saver(tf.global_variables(), max_to_keep=3)
 
+    # Training loop
     total_steps = 0
     avg_time = 0.
 
@@ -92,10 +123,11 @@ def train(args, data):
 
     highest_val_recall = -1.0
     start_time = time.time()
+
     for epoch in range(args.epochs):
         minibatch.shuffle()
-
         iter_cn = 0
+
         print('Epoch: %04d' % (epoch + 1))
         epoch_val_cost = []
         epoch_val_recall = []
@@ -104,16 +136,20 @@ def train(args, data):
         epoch_train_recall = []
         epoch_train_ndcg = []
         epoch_train_point = []
-        
+
         while not minibatch.end() and not early_stopping:
             t = time.time()
+
+            # Training step
             feed_dict = minibatch.next_train_minibatch_feed_dict()
             outs = sess.run([volrec.opt_op, volrec.loss, volrec.sum_recall, volrec.sum_ndcg, volrec.point_count], feed_dict=feed_dict)
+
             train_cost = outs[1]
             epoch_train_cost.append(train_cost)
             epoch_train_recall.append(outs[2])
             epoch_train_ndcg.append(outs[3])
             epoch_train_point.append(outs[4])
+
             # Print results
             avg_time = (avg_time * total_steps + time.time() - t) / (total_steps + 1)
 
@@ -122,11 +158,12 @@ def train(args, data):
                 epoch_val_cost.append(ret[0])
                 epoch_val_recall.append(ret[1])
                 epoch_val_ndcg.append(ret[2])
+
                 if ret[1] >= highest_val_recall:
                     saver.save(sess, ckpt_path, global_step=total_steps)
                     highest_val_recall = ret[1]
                     inc = 0
-                    print("Iter:", '%d' % iter_cn, 
+                    print("Iter:", '%d' % iter_cn,
                           "val_loss=", "{:.5f}".format(epoch_val_cost[-1]),
                           "val_recall@10=", "{:.5f}".format(epoch_val_recall[-1]),
                           "val_ndcg=", "{:.5f}".format(epoch_val_ndcg[-1]),
@@ -134,54 +171,61 @@ def train(args, data):
                           )
                 else:
                     inc += 1
+
                 if inc >= patience:
                     early_stopping = True
                     break
 
             if total_steps % args.print_every == 0:
-                print("Iter:", '%d' % iter_cn, 
+                print("Iter:", '%d' % iter_cn,
                       "train_loss=", "{:.5f}".format(np.mean(epoch_train_cost)),
-                      "train_recall@10=", "{:.5f}".format(np.sum(epoch_train_recall)/np.sum(epoch_train_point)),
-                      "train_ndcg=", "{:.5f}".format(np.sum(epoch_train_ndcg)/np.sum(epoch_train_point)),
+                      "train_recall@10=", "{:.5f}".format(np.sum(epoch_train_recall) / np.sum(epoch_train_point)),
+                      "train_ndcg=", "{:.5f}".format(np.sum(epoch_train_ndcg) / np.sum(epoch_train_point)),
                       "val_loss=", "{:.5f}".format(epoch_val_cost[-1]),
                       "val_recall@10=", "{:.5f}".format(epoch_val_recall[-1]),
                       "val_ndcg=", "{:.5f}".format(epoch_val_ndcg[-1]),
                       "time=", "{:.5f}s".format(avg_time))
                 sys.stdout.flush()
+
             total_steps += 1
             iter_cn += 1
+
         if early_stopping:
             print('Early stop at epoch: {}, total training steps: {}'.format(epoch, total_steps))
             break
-    end_time = time.time() 
+
+    end_time = time.time()
     print('-----------{} seconds per batch iteration-------------'.format((end_time - start_time) / total_steps))
     print('Parameter settings: {}'.format(args.ckpt_dir))
     print('Optimization finished!\tStart testing...')
+
+    # Evaluate on test set
     ret = evaluate(sess, volrec, minibatch, 'test')
     print('Test results:',
-            '\tLoss:{}'.format(ret[0]),
-            '\tRecall@10:{}'.format(ret[1]),
-            '\tNDCG:{}'.format(ret[2]))
-    
+          '\tLoss:{}'.format(ret[0]),
+          '\tRecall@10:{}'.format(ret[1]),
+          '\tNDCG:{}'.format(ret[2]))
+
 class Args():
+    """Class to store model and training parameters."""
     training = True
     global_only = False
     local_only = False
     epochs = 20
-    aggregator_type='attn'
-    act='relu'
+    aggregator_type = 'attn'
+    act = 'relu'
     batch_size = 200
     max_degree = 50
     num_users = -1
     num_items = 100
-    concat=False
-    learning_rate=0.001
+    concat = False
+    learning_rate = 0.001
     hidden_size = 100
     embedding_size = 50
     emb_user = 50
-    max_length=30
-    samples_1=10
-    samples_2=5
+    max_length = 30
+    samples_1 = 10
+    samples_2 = 5
     dim1 = 100
     dim2 = 100
     model_size = 'small'
@@ -191,7 +235,13 @@ class Args():
     val_every = 500
     ckpt_dir = 'save/'
 
-def parseArgs():
+def parse_args():
+    """
+    Parse command-line arguments.
+
+    Returns:
+        Args: Instance of the Args class containing parsed arguments.
+    """
     args = Args()
     parser = argparse.ArgumentParser(description='VolRec args')
     parser.add_argument('--batch', default=200, type=int)
@@ -212,6 +262,7 @@ def parseArgs():
     parser.add_argument('--decay_rate', default=0.98, type=float)
     parser.add_argument('--local', default=0, type=int)
     parser.add_argument('--glb', default=0, type=int)
+
     new_args = parser.parse_args()
 
     args.batch_size = new_args.batch
@@ -250,10 +301,20 @@ def parseArgs():
     args.ckpt_dir = args.ckpt_dir + '_decayrate{}'.format(args.decay_rate)
     args.ckpt_dir = args.ckpt_dir + '_global{}'.format(new_args.glb)
     args.ckpt_dir = args.ckpt_dir + '_local{}'.format(new_args.local)
+
     return args
 
 def main(argv=None):
-    args = parseArgs()
+    """
+    Main function to run the VolRec model.
+
+    Args:
+        argv: Command-line arguments.
+
+    Returns:
+        None
+    """
+    args = parse_args()
     print('Loading training data..')
     data = load_data('data_patha')
     print("Training data loaded!")
