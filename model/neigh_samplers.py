@@ -13,11 +13,31 @@ class UniformNeighborSampler(object):
     Assumes that adj lists are padded with random re-sampling
     """
     def __init__(self, adj_info, visible_time, deg):
+        """
+        Initializes the UniformNeighborSampler.
+
+        Args:
+            adj_info (numpy.ndarray): Adjacency information for nodes.
+            visible_time (numpy.ndarray): Array representing the visible time for each node.
+            deg (numpy.ndarray): Array representing the degree of each node.
+
+        Returns:
+            None
+        """
         self.adj_info = adj_info
         self.visible_time = visible_time
         self.deg = deg
 
     def __call__(self, inputs):
+        """
+        Callable method to sample neighbors based on specified inputs.
+
+        Args:
+            inputs (tuple): Tuple containing nodeids, num_samples, timeids, first_or_second, support_size.
+
+        Returns:
+            numpy.ndarray: Array containing sampled neighbors for each specified node.
+        """
         nodeids, num_samples, timeids, first_or_second, support_size = inputs
         adj_lists = []
         for idx in range(len(nodeids)):
