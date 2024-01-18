@@ -12,12 +12,24 @@ from .utils import *
 from .minibatch import MinibatchIterator
 from .model import VolRec
 
-
+# Setting seed for reproducibility
 seed = 123
 np.random.seed(seed)
 tf.set_random_seed(seed)
 
 def evaluate(sess, model, minibatch, val_or_test='val'):
+    """
+    Evaluate the model on the validation or test set.
+
+    Args:
+        sess (tf.Session): TensorFlow session.
+        model (VolRec): Instance of the VolRec model.
+        minibatch (MinibatchIterator): Minibatch iterator for data.
+        val_or_test (str): Specifies whether to evaluate on validation ('val') or test ('test') set.
+
+    Returns:
+        list: A list containing evaluation metrics.
+    """
     epoch_val_cost = []
     epoch_val_recall = []
     epoch_val_ndcg = []
@@ -28,14 +40,24 @@ def evaluate(sess, model, minibatch, val_or_test='val'):
         x = np.reshape(feed_dict[minibatch.placeholders['input_x']], -1).tolist()
         x_str = '_'.join([str(v) for v in x if v !=0])
         input_str.append(x_str)
-        outs = sess.run([model.loss,model.sum_recall, model.sum_ndcg, model.point_count], feed_dict=feed_dict)
+        outs = sess.run([model.loss, model.sum_recall, model.sum_ndcg, model.point_count], feed_dict=feed_dict)
         epoch_val_cost.append(outs[0])
         epoch_val_recall.append(outs[1])
         epoch_val_ndcg.append(outs[2])
         epoch_val_point.append(outs[3])
-    return [np.mean(epoch_val_cost), np.sum(epoch_val_recall) / np.sum(epoch_val_point), np.sum(epoch_val_ndcg) / np.sum(epoch_val_point), epoch_val_recall, epoch_val_ndcg, input_str]
+    return [np.mean(epoch_val_cost), np.sum(epoch_val_recall) / np.sum(epoch_val_point),
+            np.sum(epoch_val_ndcg) / np.sum(epoch_val_point), epoch_val_recall, epoch_val_ndcg, input_str]
 
 def construct_placeholders(args):
+    """
+    Construct TensorFlow placeholders for input data.
+
+    Args:
+        args (Args): Instance of the Args class containing model parameters.
+
+    Returns:
+        dict: Dictionary of TensorFlow placeholders.
+    """
     # Define placeholders
     placeholders = {
         'input_x': tf.placeholder(tf.int32, shape=(args.batch_size, args.max_length), name='input_session'),
@@ -43,18 +65,24 @@ def construct_placeholders(args):
         'mask_y': tf.placeholder(tf.float32, shape=(args.batch_size, args.max_length), name='mask_x'),
         'support_nodes_layer1': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_1*args.samples_2), name='support_nodes_layer1'),
         'support_nodes_layer2': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_2), name='support_nodes_layer2'),
-        'support_sessions_layer1': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_1*args.samples_2,\
-                                    args.max_length), name='support_sessions_layer1'),
-        'support_sessions_layer2': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_2,\
-                                    args.max_length), name='support_sessions_layer2'),
-        'support_lengths_layer1': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_1*args.samples_2), 
-                                    name='support_lengths_layer1'),
-        'support_lengths_layer2': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_2), 
-                                    name='support_lengths_layer2'),
+        'support_sessions_layer1': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_1*args.samples_2, args.max_length), name='support_sessions_layer1'),
+        'support_sessions_layer2': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_2, args.max_length), name='support_sessions_layer2'),
+        'support_lengths_layer1': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_1*args.samples_2), name='support_lengths_layer1'),
+        'support_lengths_layer2': tf.placeholder(tf.int32, shape=(args.batch_size*args.samples_2), name='support_lengths_layer2'),
     }
     return placeholders
 
 def test(args, data):
+    """
+    Test the VolRec model.
+
+    Args:
+        args (Args): Instance of the Args class containing model parameters.
+        data: Data loaded using the load_data function.
+
+    Returns:
+        None
+    """
     adj_info = data[0]
     latest_per_user_by_time = data[1]
     user_id_map = data[2]
@@ -107,6 +135,7 @@ def test(args, data):
             f.write(x_strs[idx] + '\t' + str(recall[idx]) + '\t' + str(ndcg[idx]) + '\n')
 
 class Args():
+    # Default parameters
     training = False
     global_only = False
     local_only = False
@@ -135,6 +164,12 @@ class Args():
     ckpt_dir = 'save/'
 
 def parseArgs():
+    """
+    Parse command-line arguments and set them in the Args class.
+
+    Returns:
+        Args: Instance of the Args class containing parsed arguments.
+    """
     args = Args()
     parser = argparse.ArgumentParser(description='VolRec args')
     parser.add_argument('--batch', default=200, type=int)
@@ -157,6 +192,7 @@ def parseArgs():
     parser.add_argument('--glb', default=0, type=int)
     new_args = parser.parse_args()
 
+    # Set parsed arguments in the Args class
     args.batch_size = new_args.batch
     args.aggregator_type= new_args.model
     args.act= new_args.act
@@ -196,9 +232,18 @@ def parseArgs():
     return args
 
 def main(argv=None):
+    """
+    Main function to run the VolRec model.
+
+    Args:
+        argv: Command-line arguments.
+
+    Returns:
+        None
+    """
     args = parseArgs()
     print('Loading data..')
-    data = load_data('data_path')
+    data = load_data('data_path')  # Replace 'data_path' with the actual path to your data
     print("Done loading data..")
     test(args, data)
 
