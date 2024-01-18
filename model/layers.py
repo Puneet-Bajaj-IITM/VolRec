@@ -5,7 +5,6 @@ import tensorflow as tf
 
 from .inits import zeros
 
-
 # DISCLAIMER:
 # Some sections of this file are forked from 
 # https://github.com/tkipf/gcn
@@ -66,8 +65,6 @@ class Layer(object):
     def _log_vars(self):
         for var in self.vars:
             tf.summary.histogram(self.name + '/vars/' + var, self.vars[var])
-
-
 class Dense(Layer):
     """Dense layer."""
     def __init__(self, input_dim, output_dim, dropout=0., weight_decay=0.,
@@ -84,7 +81,7 @@ class Dense(Layer):
         self.input_dim = input_dim
         self.output_dim = output_dim
 
-        # helper variable for sparse dropout
+        # Helper variable for sparse dropout
         self.sparse_inputs = sparse_inputs
         if sparse_inputs:
             self.num_features_nonzero = placeholders['num_features_nonzero']
@@ -103,12 +100,12 @@ class Dense(Layer):
     def _call(self, inputs):
         x = inputs
 
-        x = tf.nn.dropout(x, 1-self.dropout)
+        x = tf.nn.dropout(x, 1 - self.dropout)
 
-        # transform
+        # Transform
         output = tf.matmul(x, self.vars['weights'])
 
-        # bias
+        # Bias
         if self.bias:
             output += self.vars['bias']
 
